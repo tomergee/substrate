@@ -62,9 +62,11 @@ generate_proto() {
   done
 
   # protoc emits `import foo_pb2 as foo__pb2`, which doesn't resolve under our
-  # `common` package; rewrite to a relative import.
+  # `common` package; rewrite to a relative import. `sed -i` with a suffix is
+  # the only form portable across GNU and BSD/macOS sed.
   if [ -f "${grpc_file}" ]; then
-    sed -i "s/^import ${proto_base}_pb2 as ${proto_base}__pb2/from . import ${proto_base}_pb2 as ${proto_base}__pb2/" "${grpc_file}"
+    sed -i.bak "s/^import ${proto_base}_pb2 as ${proto_base}__pb2/from . import ${proto_base}_pb2 as ${proto_base}__pb2/" "${grpc_file}"
+    rm -f "${grpc_file}.bak"
   fi
 }
 
