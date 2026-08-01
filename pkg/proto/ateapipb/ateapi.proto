@@ -12,11 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO: Here and everywhere, s/Session/Actor to align with the glossary.
+// NOTE on Session vs Actor naming: the SessionIdentity service and its
+// session_* fields predate the current glossary (where this concept is an
+// Actor). The rename is deliberately deferred, NOT dropped: the JWT `sub`
+// format and the `ate.dev` extension claim names are an external contract
+// with relying parties, so renaming is a product-naming decision that goes
+// beyond proto mechanics. It must be resolved before any client SDK ships
+// identity helpers (nothing outside this repo pins the SessionIdentity
+// method paths until then; dual service registration is the fallback
+// deprecation path if it slips).
 
 syntax = "proto3";
 
-package ateapi;
+package ateapi.v1alpha1;
 
 import "google/protobuf/timestamp.proto";
 

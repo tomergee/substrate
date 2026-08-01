@@ -255,7 +255,7 @@ Once a template is `Ready`, creating an actor logically (via `kubectl-ate create
 
 The Substrate Control Plane (`ate-api-server`) exposes a gRPC interface for managing actors and workers. This is the primary API used by the `kubectl-ate` CLI and higher-level frameworks.
 
-### Service: `ateapi.Control`
+### Service: `ateapi.v1alpha1.Control`
 
 #### `CreateActor`
 Registers a new logical actor in the system.
@@ -298,7 +298,7 @@ Query the physical resource pool.
 
 Workloads can exchange their ephemeral Kubernetes credentials for stable **Session Identity** credentials that persist even as the process migrates between different physical workers.
 
-### Service: `ateapi.SessionIdentity`
+### Service: `ateapi.v1alpha1.SessionIdentity`
 *   **`MintJWT`:** Generates an OIDC-compatible JWT identifying the Substrate Actor.
 *   **`MintCert`:** Signs a Certificate Signing Request (CSR) to provide an mTLS identity for the actor.
 
