@@ -19,7 +19,7 @@ import warnings
 
 from . import ateapi_pb2 as ateapi__pb2
 
-GRPC_GENERATED_VERSION = '1.81.1'
+GRPC_GENERATED_VERSION = '1.83.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -50,67 +50,67 @@ class ControlStub:
             channel: A grpc.Channel.
         """
         self.GetActor = channel.unary_unary(
-                '/ateapi.Control/GetActor',
+                '/ateapi.v1alpha1.Control/GetActor',
                 request_serializer=ateapi__pb2.GetActorRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.Actor.FromString,
                 _registered_method=True)
         self.CreateActor = channel.unary_unary(
-                '/ateapi.Control/CreateActor',
+                '/ateapi.v1alpha1.Control/CreateActor',
                 request_serializer=ateapi__pb2.CreateActorRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.Actor.FromString,
                 _registered_method=True)
         self.UpdateActor = channel.unary_unary(
-                '/ateapi.Control/UpdateActor',
+                '/ateapi.v1alpha1.Control/UpdateActor',
                 request_serializer=ateapi__pb2.UpdateActorRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.UpdateActorResponse.FromString,
                 _registered_method=True)
         self.SuspendActor = channel.unary_unary(
-                '/ateapi.Control/SuspendActor',
+                '/ateapi.v1alpha1.Control/SuspendActor',
                 request_serializer=ateapi__pb2.SuspendActorRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.SuspendActorResponse.FromString,
                 _registered_method=True)
         self.PauseActor = channel.unary_unary(
-                '/ateapi.Control/PauseActor',
+                '/ateapi.v1alpha1.Control/PauseActor',
                 request_serializer=ateapi__pb2.PauseActorRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.PauseActorResponse.FromString,
                 _registered_method=True)
         self.ResumeActor = channel.unary_unary(
-                '/ateapi.Control/ResumeActor',
+                '/ateapi.v1alpha1.Control/ResumeActor',
                 request_serializer=ateapi__pb2.ResumeActorRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.ResumeActorResponse.FromString,
                 _registered_method=True)
         self.DeleteActor = channel.unary_unary(
-                '/ateapi.Control/DeleteActor',
+                '/ateapi.v1alpha1.Control/DeleteActor',
                 request_serializer=ateapi__pb2.DeleteActorRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.Actor.FromString,
                 _registered_method=True)
         self.ListWorkers = channel.unary_unary(
-                '/ateapi.Control/ListWorkers',
+                '/ateapi.v1alpha1.Control/ListWorkers',
                 request_serializer=ateapi__pb2.ListWorkersRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.ListWorkersResponse.FromString,
                 _registered_method=True)
         self.ListActors = channel.unary_unary(
-                '/ateapi.Control/ListActors',
+                '/ateapi.v1alpha1.Control/ListActors',
                 request_serializer=ateapi__pb2.ListActorsRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.ListActorsResponse.FromString,
                 _registered_method=True)
         self.CreateAtespace = channel.unary_unary(
-                '/ateapi.Control/CreateAtespace',
+                '/ateapi.v1alpha1.Control/CreateAtespace',
                 request_serializer=ateapi__pb2.CreateAtespaceRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.Atespace.FromString,
                 _registered_method=True)
         self.GetAtespace = channel.unary_unary(
-                '/ateapi.Control/GetAtespace',
+                '/ateapi.v1alpha1.Control/GetAtespace',
                 request_serializer=ateapi__pb2.GetAtespaceRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.Atespace.FromString,
                 _registered_method=True)
         self.ListAtespaces = channel.unary_unary(
-                '/ateapi.Control/ListAtespaces',
+                '/ateapi.v1alpha1.Control/ListAtespaces',
                 request_serializer=ateapi__pb2.ListAtespacesRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.ListAtespacesResponse.FromString,
                 _registered_method=True)
         self.DeleteAtespace = channel.unary_unary(
-                '/ateapi.Control/DeleteAtespace',
+                '/ateapi.v1alpha1.Control/DeleteAtespace',
                 request_serializer=ateapi__pb2.DeleteAtespaceRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.Atespace.FromString,
                 _registered_method=True)
@@ -170,14 +170,14 @@ class ControlServicer:
         raise NotImplementedError('Method not implemented!')
 
     def ListWorkers(self, request, context):
-        """List all workers currently reflected in redis.
+        """List Workers.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def ListActors(self, request, context):
-        """List all actors currently reflected in redis.
+        """List Actors.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -198,7 +198,7 @@ class ControlServicer:
         raise NotImplementedError('Method not implemented!')
 
     def ListAtespaces(self, request, context):
-        """List all Atespaces.
+        """List Atespaces.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -281,9 +281,9 @@ def add_ControlServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'ateapi.Control', rpc_method_handlers)
+            'ateapi.v1alpha1.Control', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('ateapi.Control', rpc_method_handlers)
+    server.add_registered_method_handlers('ateapi.v1alpha1.Control', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -305,7 +305,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/GetActor',
+            '/ateapi.v1alpha1.Control/GetActor',
             ateapi__pb2.GetActorRequest.SerializeToString,
             ateapi__pb2.Actor.FromString,
             options,
@@ -332,7 +332,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/CreateActor',
+            '/ateapi.v1alpha1.Control/CreateActor',
             ateapi__pb2.CreateActorRequest.SerializeToString,
             ateapi__pb2.Actor.FromString,
             options,
@@ -359,7 +359,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/UpdateActor',
+            '/ateapi.v1alpha1.Control/UpdateActor',
             ateapi__pb2.UpdateActorRequest.SerializeToString,
             ateapi__pb2.UpdateActorResponse.FromString,
             options,
@@ -386,7 +386,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/SuspendActor',
+            '/ateapi.v1alpha1.Control/SuspendActor',
             ateapi__pb2.SuspendActorRequest.SerializeToString,
             ateapi__pb2.SuspendActorResponse.FromString,
             options,
@@ -413,7 +413,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/PauseActor',
+            '/ateapi.v1alpha1.Control/PauseActor',
             ateapi__pb2.PauseActorRequest.SerializeToString,
             ateapi__pb2.PauseActorResponse.FromString,
             options,
@@ -440,7 +440,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/ResumeActor',
+            '/ateapi.v1alpha1.Control/ResumeActor',
             ateapi__pb2.ResumeActorRequest.SerializeToString,
             ateapi__pb2.ResumeActorResponse.FromString,
             options,
@@ -467,7 +467,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/DeleteActor',
+            '/ateapi.v1alpha1.Control/DeleteActor',
             ateapi__pb2.DeleteActorRequest.SerializeToString,
             ateapi__pb2.Actor.FromString,
             options,
@@ -494,7 +494,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/ListWorkers',
+            '/ateapi.v1alpha1.Control/ListWorkers',
             ateapi__pb2.ListWorkersRequest.SerializeToString,
             ateapi__pb2.ListWorkersResponse.FromString,
             options,
@@ -521,7 +521,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/ListActors',
+            '/ateapi.v1alpha1.Control/ListActors',
             ateapi__pb2.ListActorsRequest.SerializeToString,
             ateapi__pb2.ListActorsResponse.FromString,
             options,
@@ -548,7 +548,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/CreateAtespace',
+            '/ateapi.v1alpha1.Control/CreateAtespace',
             ateapi__pb2.CreateAtespaceRequest.SerializeToString,
             ateapi__pb2.Atespace.FromString,
             options,
@@ -575,7 +575,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/GetAtespace',
+            '/ateapi.v1alpha1.Control/GetAtespace',
             ateapi__pb2.GetAtespaceRequest.SerializeToString,
             ateapi__pb2.Atespace.FromString,
             options,
@@ -602,7 +602,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/ListAtespaces',
+            '/ateapi.v1alpha1.Control/ListAtespaces',
             ateapi__pb2.ListAtespacesRequest.SerializeToString,
             ateapi__pb2.ListAtespacesResponse.FromString,
             options,
@@ -629,7 +629,7 @@ class Control:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Control/DeleteAtespace',
+            '/ateapi.v1alpha1.Control/DeleteAtespace',
             ateapi__pb2.DeleteAtespaceRequest.SerializeToString,
             ateapi__pb2.Atespace.FromString,
             options,
@@ -655,7 +655,7 @@ class DebugStub:
             channel: A grpc.Channel.
         """
         self.DebugClear = channel.unary_unary(
-                '/ateapi.Debug/DebugClear',
+                '/ateapi.v1alpha1.Debug/DebugClear',
                 request_serializer=ateapi__pb2.DebugClearRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.DebugClearResponse.FromString,
                 _registered_method=True)
@@ -683,9 +683,9 @@ def add_DebugServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'ateapi.Debug', rpc_method_handlers)
+            'ateapi.v1alpha1.Debug', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('ateapi.Debug', rpc_method_handlers)
+    server.add_registered_method_handlers('ateapi.v1alpha1.Debug', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -708,7 +708,7 @@ class Debug:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.Debug/DebugClear',
+            '/ateapi.v1alpha1.Debug/DebugClear',
             ateapi__pb2.DebugClearRequest.SerializeToString,
             ateapi__pb2.DebugClearResponse.FromString,
             options,
@@ -748,12 +748,12 @@ class SessionIdentityStub:
             channel: A grpc.Channel.
         """
         self.MintJWT = channel.unary_unary(
-                '/ateapi.SessionIdentity/MintJWT',
+                '/ateapi.v1alpha1.SessionIdentity/MintJWT',
                 request_serializer=ateapi__pb2.MintJWTRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.MintJWTResponse.FromString,
                 _registered_method=True)
         self.MintCert = channel.unary_unary(
-                '/ateapi.SessionIdentity/MintCert',
+                '/ateapi.v1alpha1.SessionIdentity/MintCert',
                 request_serializer=ateapi__pb2.MintCertRequest.SerializeToString,
                 response_deserializer=ateapi__pb2.MintCertResponse.FromString,
                 _registered_method=True)
@@ -811,9 +811,9 @@ def add_SessionIdentityServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'ateapi.SessionIdentity', rpc_method_handlers)
+            'ateapi.v1alpha1.SessionIdentity', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('ateapi.SessionIdentity', rpc_method_handlers)
+    server.add_registered_method_handlers('ateapi.v1alpha1.SessionIdentity', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -850,7 +850,7 @@ class SessionIdentity:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.SessionIdentity/MintJWT',
+            '/ateapi.v1alpha1.SessionIdentity/MintJWT',
             ateapi__pb2.MintJWTRequest.SerializeToString,
             ateapi__pb2.MintJWTResponse.FromString,
             options,
@@ -877,7 +877,7 @@ class SessionIdentity:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ateapi.SessionIdentity/MintCert',
+            '/ateapi.v1alpha1.SessionIdentity/MintCert',
             ateapi__pb2.MintCertRequest.SerializeToString,
             ateapi__pb2.MintCertResponse.FromString,
             options,
