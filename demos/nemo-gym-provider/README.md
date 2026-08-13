@@ -44,6 +44,16 @@ On the cluster:
 3. **An ActorTemplate per task image**, pre-provisioned in the `ate-env` namespace (the substrate
    analog of "the image is available"). The `ate-env deploy` default is `default-env`; add one
    template per additional image and map them under `create.image_templates` below.
+
+   > **The template's image must contain and launch `ate-env-guest`.** Every provider operation
+   > — readiness, exec, file transfer, even `create()` completing — goes through the guest's API
+   > behind the router. A template built from an unmodified task image (no guest) fails
+   > *completely*, not partially: the actor starts, but every guest call returns
+   > `502 bad gateway` and `create()` times out with `SandboxCreateVerificationError`
+   > (verified against a digest-pinned `python:3.12-slim` template). Until OCI image-volume
+   > injection exists (see the integration plan's "runtime injection modes"), task images must be
+   > rebuilt to embed the guest and run it as the entrypoint — `default-env` works because its
+   > image *is* the guest. Note substrate also requires template images to be digest-pinned.
 4. **Network path from wherever Gym's rollout workers run** to `ate-env-api`: in-cluster DNS
    (`http://ate-env-api.ate-env:7777`) or, for a workstation, a port-forward:
 
@@ -194,6 +204,7 @@ Known limits (tracked in the RL-on-Substrate proposal):
 |---|---|
 | `SandboxCreateError: no ActorTemplate mapped for image …` | The spec named an image with no template. Pre-provision a template and add it to `create.image_templates`, or set `provider_options.template` |
 | Create times out (`SandboxCreateVerificationError`) | Check warm workers exist (`kubectl get pods -n ate-env`) and the template is Ready (`kubectl get actortemplate -n ate-env`). More parallel creates than warm workers will queue |
+| Create times out and probes see `502 bad gateway` | The template's image does not run `ate-env-guest` — the actor is up but nothing serves the guest API. Rebuild the image with the guest as entrypoint (see Prerequisites #3) |
 | Every exec returns 503 with `CERTIFICATE_EXPIRED` | The atenet router's pod certificate expired and wasn't hot-reloaded (seen on routers running > ~1 day): `kubectl -n ate-system rollout restart deploy/atenet-router` |
 | `ConnectError` from the provider | `api_url` unreachable — port-forward died, or wrong kubectl context (`kubectl config current-context`) |
 | Actor stuck `RESUMING` forever | Restore landed on a CPU-incompatible node (mixed Intel/AMD pools) or raced a router restart. Delete the env and recreate; long-term fix is CPU-aware placement |
