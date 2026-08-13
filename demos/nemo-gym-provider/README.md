@@ -66,6 +66,40 @@ Locally:
 5. **Python ≥ 3.10** and pip. `nemo-gym` itself is only needed on the machine running the Gym
    resource servers — this package's tests run without it (see Testing).
 
+## Baking a task image (Mode A)
+
+Until OCI image-volume injection exists upstream, a task image must contain and launch
+`ate-env-guest`. `hack/bake-task-image.sh` builds the guest (a static Go binary) as a layer on top
+of any base image with `ko` — no Dockerfile — and prints the digest-pinned ref substrate needs:
+
+```bash
+# needs: ko on PATH (or $KO), and an agent-substrate/env checkout ($ATE_ENV_REPO or ~/dev/substrate-env)
+IMAGE=$(hack/bake-task-image.sh python:3.12-slim gcr.io/$PROJECT/py-task-guest)
+echo "$IMAGE"   # gcr.io/.../py-task-guest@sha256:...
+```
+
+Then create an ActorTemplate whose container runs the guest, and map it in the provider config:
+
+```yaml
+# kubectl apply -f -
+apiVersion: ate.dev/v1alpha1
+kind: ActorTemplate
+metadata: { name: py-task, namespace: ate-env }
+spec:
+  containers:
+  - { name: guest, image: "IMAGE_FROM_ABOVE", command: ["/ko-app/ate-env-guest"],
+      env: [{ name: PORT, value: "80" }], readyz: { httpGet: { path: /readyz, port: 80 } } }
+  pauseImage: registry.k8s.io/pause:3.10.2@sha256:f548e0e8e3dc1896ca956272154dde3314e8cc4fde0a57577ee9fa1c63f5baf4
+  sandboxClass: gvisor
+  snapshotsConfig: { location: "gs://$BUCKET/ate-env/" }
+  workerSelector: { matchLabels: { workload: default-env } }
+```
+
+Verified end-to-end: `python:3.12-slim` and `node:22-slim` bases both bake, template, and run real
+`python3` / `node` tasks through the provider (the guest is static, so any base distro works). This
+is the per-image path; the fleet-scale answer is injecting the guest as a volume — see the
+integration plan's "runtime injection modes".
+
 ## Installation
 
 ```bash
