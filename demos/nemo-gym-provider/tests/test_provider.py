@@ -172,6 +172,14 @@ def test_exec_timeout_wraps_command(provider, fake):
     assert fake.shell_log[-1]["command"].startswith("timeout 3 sh -c ")
 
 
+def test_exec_subsecond_timeout_floors_to_one(provider, fake):
+    # `timeout 0` disables the limit in coreutils, so a sub-second deadline
+    # must round up to 1s rather than floor to 0.
+    handle = run(provider.create(SandboxSpec()))
+    run(provider.exec(handle, "sleep 100", timeout_s=0.5))
+    assert fake.shell_log[-1]["command"].startswith("timeout 1 sh -c ")
+
+
 def test_exec_rejects_user(provider, fake):
     handle = run(provider.create(SandboxSpec()))
     with pytest.raises(ValueError, match="user"):
