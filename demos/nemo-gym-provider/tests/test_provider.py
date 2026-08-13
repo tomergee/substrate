@@ -210,3 +210,63 @@ def test_unknown_provider_option_rejected(provider):
 def test_unknown_config_key_rejected():
     with pytest.raises(ValueError, match="unknown option"):
         SubstrateSandboxProvider({"connection": {"api_urll": "typo"}})
+
+
+def test_exec_client_timeout_returns_sentinel_result(provider, fake):
+    handle = run(provider.create(SandboxSpec()))
+
+    def raise_timeout(request: httpx.Request) -> httpx.Response:
+        if b"sleepy" in request.content:
+            raise httpx.ReadTimeout("deadline", request=request)
+        return fake.handler(request)
+
+    provider._client = httpx.AsyncClient(  # noqa: SLF001 - test seam
+        transport=httpx.MockTransport(raise_timeout), base_url="http://fake"
+    )
+    result = run(provider.exec(handle, "sleepy", timeout_s=1))
+    assert result.return_code == -1
+    assert "timed out" in (result.stderr or "")
+
+
+def test_status_error_and_unknown(provider, fake):
+    handle = run(provider.create(SandboxSpec()))
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/shell"):
+            return httpx.Response(503, text="router drain")
+        return fake.handler(request)
+
+    provider._client = httpx.AsyncClient(  # noqa: SLF001
+        transport=httpx.MockTransport(flaky), base_url="http://fake"
+    )
+    assert run(provider.status(handle)) == SandboxStatus.ERROR
+
+    def unreachable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("no route", request=request)
+
+    provider._client = httpx.AsyncClient(  # noqa: SLF001
+        transport=httpx.MockTransport(unreachable), base_url="http://fake"
+    )
+    assert run(provider.status(handle)) == SandboxStatus.UNKNOWN
+
+
+def test_provider_options_override_template_and_namespace(provider, fake):
+    handle = run(
+        provider.create(
+            SandboxSpec(provider_options={"template": "tpl-x", "namespace": "ns-x"})
+        )
+    )
+    assert fake.envs[handle.sandbox_id]["template"] == "tpl-x"
+    assert fake.envs[handle.sandbox_id]["namespace"] == "ns-x"
+
+
+def test_download_missing_file_raises(provider, fake, tmp_path: Path):
+    handle = run(provider.create(SandboxSpec()))
+    with pytest.raises(httpx.HTTPStatusError):
+        run(provider.download_file(handle, "/nope", tmp_path / "out"))
+
+
+def test_aclose_releases_client(provider):
+    run(provider.aclose())
+    with pytest.raises(RuntimeError):
+        run(provider._client.post("/v1/envs", json={}))  # noqa: SLF001
