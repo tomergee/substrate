@@ -30,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import math
 import shlex
 import time
 import uuid
@@ -201,8 +202,11 @@ class SubstrateSandboxProvider:
         timeout = httpx.Timeout(timeout_s + 5.0) if timeout_s else httpx.USE_CLIENT_DEFAULT
         if timeout_s:
             # Enforce the deadline guest-side too, so a runaway process does
-            # not outlive the HTTP request that started it.
-            body["command"] = f"timeout {int(timeout_s)} sh -c {shlex.quote(command)}"
+            # not outlive the HTTP request that started it. Round up to whole
+            # seconds with a floor of 1: `timeout 0` disables the limit in
+            # coreutils, so a sub-second timeout_s must not floor to zero.
+            guest_deadline = max(1, math.ceil(timeout_s))
+            body["command"] = f"timeout {guest_deadline} sh -c {shlex.quote(command)}"
 
         try:
             resp = await self._client.post(
