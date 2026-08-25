@@ -15,12 +15,17 @@
 """NeMo Gym sandbox provider backed by Agent Substrate.
 
 Each sandbox is a Substrate actor fronted by the ``ate-env`` API
-(https://github.com/agent-substrate/env): creation goes through
-``POST /v1/envs``, command execution and file transfer through the
-``ate-env-guest`` daemon that runs inside every actor. Idle sandboxes can be
-suspended by Substrate and are resumed transparently on the next request by
-the atenet router, so a fleet of mostly-waiting rollout sandboxes holds no
+(https://github.com/agent-substrate/env). Environment lifecycle (create,
+delete) goes through the gRPC ``ateenv.v1.EnvironmentService``; command
+execution and file transfer go over HTTP to the ``ate-env-guest`` daemon
+that runs inside every actor, proxied by ``ate-env-api``. Both surfaces are
+served on the same ``api_url`` port (h2c). Idle sandboxes can be suspended
+by Substrate and are resumed transparently on the next request by the
+atenet router, so a fleet of mostly-waiting rollout sandboxes holds no
 workers.
+
+Requires an ate-env at or after the EnvironmentService migration (env#18);
+the earlier HTTP-only lifecycle endpoints no longer exist.
 
 Contract: https://docs.nvidia.com/nemo/gym/main/infrastructure/sandbox/adding-a-provider/
 """
@@ -37,7 +42,10 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
+from urllib.parse import urlparse
 
+import grpc
+import grpc.aio
 import httpx
 
 from ._compat import (
@@ -48,6 +56,7 @@ from ._compat import (
     SandboxSpec,
     SandboxStatus,
 )
+from ._gen import env_pb2, env_pb2_grpc
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +151,24 @@ class SubstrateSandboxProvider:
             base_url=self._connection.api_url,
             timeout=self._connection.request_timeout_s,
         )
+        # The EnvironmentService channel is opened lazily so constructing a
+        # provider (and unit tests that inject a fake) never dials.
+        self._grpc_channel: grpc.aio.Channel | None = None
+        self._env_service: env_pb2_grpc.EnvironmentServiceStub | None = None
+
+    @property
+    def _env(self) -> env_pb2_grpc.EnvironmentServiceStub:
+        if self._env_service is None:
+            url = urlparse(self._connection.api_url)
+            target = f"{url.hostname}:{url.port or (443 if url.scheme == 'https' else 80)}"
+            if url.scheme == "https":
+                self._grpc_channel = grpc.aio.secure_channel(
+                    target, grpc.ssl_channel_credentials()
+                )
+            else:
+                self._grpc_channel = grpc.aio.insecure_channel(target)
+            self._env_service = env_pb2_grpc.EnvironmentServiceStub(self._grpc_channel)
+        return self._env_service
 
     # -- provider contract -------------------------------------------------
 
@@ -151,15 +178,19 @@ class SubstrateSandboxProvider:
         namespace = opts.namespace or self._create.namespace
         env_id = f"gym-{uuid.uuid4().hex[:10]}"
 
-        resp = await self._client.post(
-            "/v1/envs",
-            json={"id": env_id, "template": template, "namespace": namespace},
+        request = env_pb2.CreateEnvironmentRequest(
+            id=env_id,
+            template=env_pb2.Template(name=template, namespace=namespace),
         )
-        if resp.status_code // 100 != 2:
+        try:
+            await self._env.CreateEnvironment(
+                request, timeout=self._connection.request_timeout_s
+            )
+        except grpc.aio.AioRpcError as exc:
             raise SandboxCreateError(
                 f"creating substrate env {env_id!r} (template {template!r}): "
-                f"HTTP {resp.status_code}: {resp.text.strip()}"
-            )
+                f"{exc.code().name}: {exc.details()}"
+            ) from exc
 
         try:
             await self._wait_ready(env_id, spec.ready_timeout_s or self._create.ready_timeout_s)
@@ -199,8 +230,11 @@ class SubstrateSandboxProvider:
         if effective_cwd:
             body["cwd"] = effective_cwd
 
-        timeout = httpx.Timeout(timeout_s + 5.0) if timeout_s else httpx.USE_CLIENT_DEFAULT
-        if timeout_s:
+        # `is not None` so an explicit 0 means "shortest allowed deadline"
+        # (1s guest-side), not "unlimited".
+        has_deadline = timeout_s is not None
+        timeout = httpx.Timeout(timeout_s + 5.0) if has_deadline else httpx.USE_CLIENT_DEFAULT
+        if has_deadline:
             # Enforce the deadline guest-side too, so a runaway process does
             # not outlive the HTTP request that started it. Round up to whole
             # seconds with a floor of 1: `timeout 0` disables the limit in
@@ -236,7 +270,13 @@ class SubstrateSandboxProvider:
             f"/v1/envs/{handle.sandbox_id}/file", params={"path": source_path}
         )
         resp.raise_for_status()
-        content = base64.b64decode(resp.json().get("content") or b"")
+        payload = resp.json()
+        if "content" not in payload:
+            raise RuntimeError(
+                f"file read response for {source_path!r} has no 'content' field: "
+                "ate-env API drift?"
+            )
+        content = base64.b64decode(payload["content"] or b"")
         target = Path(target_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(content)
@@ -263,6 +303,10 @@ class SubstrateSandboxProvider:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+        if self._grpc_channel is not None:
+            await self._grpc_channel.close()
+            self._grpc_channel = None
+            self._env_service = None
 
     # -- internals ----------------------------------------------------------
 
@@ -288,9 +332,15 @@ class SubstrateSandboxProvider:
                 resp = await self._client.post(
                     f"/v1/envs/{env_id}/shell", json={"command": "true"}, timeout=10.0
                 )
-                if resp.status_code // 100 == 2 and resp.json().get("exit_code") == 0:
-                    return
-                last_error = f"HTTP {resp.status_code}: {resp.text.strip()[:200]}"
+                if resp.status_code // 100 == 2:
+                    try:
+                        if resp.json().get("exit_code") == 0:
+                            return
+                        last_error = f"probe exited nonzero: {resp.text.strip()[:200]}"
+                    except ValueError:
+                        last_error = f"non-JSON probe response: {resp.text.strip()[:200]}"
+                else:
+                    last_error = f"HTTP {resp.status_code}: {resp.text.strip()[:200]}"
             except httpx.HTTPError as exc:
                 last_error = str(exc)
             await asyncio.sleep(self._create.ready_poll_interval_s)
@@ -311,13 +361,16 @@ class SubstrateSandboxProvider:
 
     async def _best_effort_delete(self, env_id: str) -> None:
         try:
-            resp = await self._client.delete(f"/v1/envs/{env_id}")
-            if resp.status_code not in (200, 202, 204, 404):
+            await self._env.DeleteEnvironment(
+                env_pb2.DeleteEnvironmentRequest(id=env_id),
+                timeout=self._connection.request_timeout_s,
+            )
+        except grpc.aio.AioRpcError as exc:
+            # NOT_FOUND means the env is already gone: close() is idempotent.
+            if exc.code() is not grpc.StatusCode.NOT_FOUND:
                 logger.warning(
-                    "deleting substrate env %s: HTTP %s: %s",
+                    "deleting substrate env %s: %s: %s",
                     env_id,
-                    resp.status_code,
-                    resp.text.strip()[:200],
+                    exc.code().name,
+                    exc.details(),
                 )
-        except httpx.HTTPError as exc:
-            logger.warning("deleting substrate env %s: %s", env_id, exc)

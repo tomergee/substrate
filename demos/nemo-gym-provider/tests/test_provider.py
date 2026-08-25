@@ -14,10 +14,15 @@
 
 """Contract tests for the substrate NeMo Gym provider.
 
-Runs against an in-memory fake of the ate-env HTTP API (httpx.MockTransport),
-asserting the rules from the adding-a-provider contract: create returns only
-when the sandbox executes commands, exec never raises on nonzero exits, close
-is cleanup-safe, and provider_options are validated strictly.
+Runs against in-memory fakes of the ate-env API, asserting the rules from
+the adding-a-provider contract: create returns only when the sandbox
+executes commands, exec never raises on nonzero exits, close is
+cleanup-safe, and provider_options are validated strictly.
+
+The fakes mirror ate-env after the EnvironmentService migration (env#18):
+environment lifecycle is the gRPC ``ateenv.v1.EnvironmentService``
+(FakeEnvService), while exec and file transfer stay on the HTTP guest proxy
+(FakeAteEnv via httpx.MockTransport).
 """
 
 from __future__ import annotations
@@ -25,8 +30,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 from pathlib import Path
 
+import grpc
+import grpc.aio
 import httpx
 import pytest
 
@@ -36,32 +44,32 @@ from nemo_gym_substrate._compat import (
     SandboxSpec,
     SandboxStatus,
 )
+from nemo_gym_substrate._gen import env_pb2
 from nemo_gym_substrate.provider import SubstrateSandboxProvider
 
 
+def _rpc_error(code: grpc.StatusCode, details: str) -> grpc.aio.AioRpcError:
+    return grpc.aio.AioRpcError(
+        code, grpc.aio.Metadata(), grpc.aio.Metadata(), details=details
+    )
+
+
 class FakeAteEnv:
-    """In-memory ate-env API: envs, files, and scripted shell behavior."""
+    """In-memory ate-env guest proxy: envs, files, scripted shell behavior."""
 
     def __init__(self) -> None:
         self.envs: dict[str, dict] = {}
         self.files: dict[tuple[str, str], bytes] = {}
         self.shell_log: list[dict] = []
-        self.create_status = 201
+        self.create_code: grpc.StatusCode | None = None  # scripted create failure
+        self.delete_code: grpc.StatusCode | None = None  # scripted delete failure
         self.ready_after_probes = 0  # fail this many readiness probes first
         self._probes = 0
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path, method = request.url.path, request.method
-        if path == "/v1/envs" and method == "POST":
-            body = json.loads(request.content)
-            if self.create_status // 100 != 2:
-                return httpx.Response(self.create_status, text="create refused")
-            self.envs[body["id"]] = body
-            return httpx.Response(201)
         parts = path.split("/")  # ['', 'v1', 'envs', '<id>', ...]
         env_id = parts[3] if len(parts) > 3 else ""
-        if method == "DELETE" and len(parts) == 4:
-            return httpx.Response(200 if self.envs.pop(env_id, None) else 404)
         if env_id not in self.envs:
             return httpx.Response(404, text="no such env")
         rest = "/".join(parts[4:])
@@ -92,6 +100,29 @@ class FakeAteEnv:
         return httpx.Response(404, text=f"unhandled {method} {path}")
 
 
+class FakeEnvService:
+    """gRPC EnvironmentService fake sharing env state with FakeAteEnv."""
+
+    def __init__(self, fake: FakeAteEnv) -> None:
+        self._fake = fake
+
+    async def CreateEnvironment(self, request, timeout=None):
+        if self._fake.create_code is not None:
+            raise _rpc_error(self._fake.create_code, "create refused")
+        self._fake.envs[request.id] = {
+            "template": request.template.name,
+            "namespace": request.template.namespace,
+        }
+        return env_pb2.CreateEnvironmentResponse()
+
+    async def DeleteEnvironment(self, request, timeout=None):
+        if self._fake.delete_code is not None:
+            raise _rpc_error(self._fake.delete_code, "delete refused")
+        if self._fake.envs.pop(request.id, None) is None:
+            raise _rpc_error(grpc.StatusCode.NOT_FOUND, "no such env")
+        return env_pb2.DeleteEnvironmentResponse()
+
+
 @pytest.fixture()
 def fake() -> FakeAteEnv:
     return FakeAteEnv()
@@ -105,6 +136,7 @@ def provider(fake: FakeAteEnv) -> SubstrateSandboxProvider:
     p._client = httpx.AsyncClient(  # noqa: SLF001 - test seam
         transport=httpx.MockTransport(fake.handler), base_url="http://fake"
     )
+    p._env_service = FakeEnvService(fake)  # noqa: SLF001 - test seam
     return p
 
 
@@ -131,8 +163,8 @@ def test_create_waits_for_readiness(provider, fake):
 
 
 def test_create_failure_raises_create_error(provider, fake):
-    fake.create_status = 500
-    with pytest.raises(SandboxCreateError):
+    fake.create_code = grpc.StatusCode.RESOURCE_EXHAUSTED
+    with pytest.raises(SandboxCreateError, match="RESOURCE_EXHAUSTED"):
         run(provider.create(SandboxSpec()))
 
 
@@ -180,6 +212,13 @@ def test_exec_subsecond_timeout_floors_to_one(provider, fake):
     assert fake.shell_log[-1]["command"].startswith("timeout 1 sh -c ")
 
 
+def test_exec_zero_timeout_means_shortest_deadline(provider, fake):
+    # An explicit 0 is a deadline (the 1s floor), not "unlimited".
+    handle = run(provider.create(SandboxSpec()))
+    run(provider.exec(handle, "sleep 100", timeout_s=0))
+    assert fake.shell_log[-1]["command"].startswith("timeout 1 sh -c ")
+
+
 def test_exec_rejects_user(provider, fake):
     handle = run(provider.create(SandboxSpec()))
     with pytest.raises(ValueError, match="user"):
@@ -206,8 +245,16 @@ def test_status_running_stopped_unknown(provider, fake):
 def test_close_is_idempotent(provider, fake):
     handle = run(provider.create(SandboxSpec()))
     run(provider.close(handle))
-    run(provider.close(handle))  # second delete hits 404; must not raise
+    run(provider.close(handle))  # second delete hits NOT_FOUND; must not raise
     assert handle.sandbox_id not in fake.envs
+
+
+def test_close_logs_but_does_not_raise_on_delete_failure(provider, fake, caplog):
+    handle = run(provider.create(SandboxSpec()))
+    fake.delete_code = grpc.StatusCode.INTERNAL
+    with caplog.at_level(logging.WARNING, logger="nemo_gym_substrate.provider"):
+        run(provider.close(handle))  # best-effort: never raises
+    assert any("deleting substrate env" in r.message for r in caplog.records)
 
 
 def test_unknown_provider_option_rejected(provider):
@@ -277,4 +324,4 @@ def test_download_missing_file_raises(provider, fake, tmp_path: Path):
 def test_aclose_releases_client(provider):
     run(provider.aclose())
     with pytest.raises(RuntimeError):
-        run(provider._client.post("/v1/envs", json={}))  # noqa: SLF001
+        run(provider._client.post("/v1/envs/x/shell", json={}))  # noqa: SLF001
