@@ -27,16 +27,21 @@ On the cluster:
 1. **Agent Substrate installed** (`ate-system` namespace healthy — api-server, controller,
    atelet, atenet-router, valkey). See `hack/install-ate.sh` at the repo root.
 2. **The `ate-env` system deployed** — namespace, WorkerPool, ActorTemplate(s), and the
-   `ate-env-api` service:
+   `ate-env-api` service. The provider needs an ate-env at or after the
+   EnvironmentService migration (env#18): environment create/delete are gRPC
+   (`ateenv.v1.EnvironmentService`, served with h2c on the same API port), while exec
+   and file transfer stay on the HTTP guest proxy. A port-forward carries both.
 
    ```bash
-   ate-env deploy \
+   ate-env manifest \
      --guest-image  <ate-env-guest image> \
      --api-image    <ate-env-api image> \
      --ateom-image  <ateom-gvisor image matching your substrate build> \
      --snapshots-bucket gs://<bucket>/ate-env/ | kubectl apply -f -
    kubectl get pods -n ate-env   # api + warm workers Running
    ```
+
+   (The subcommand was `ate-env deploy` before env#24.)
 
    If your `ateapi` requires authentication (it does on any standard install), the
    `ate-env-api` Deployment needs a projected ServiceAccount token with audience
@@ -50,10 +55,12 @@ On the cluster:
    > behind the router. A template built from an unmodified task image (no guest) fails
    > *completely*, not partially: the actor starts, but every guest call returns
    > `502 bad gateway` and `create()` times out with `SandboxCreateVerificationError`
-   > (verified against a digest-pinned `python:3.12-slim` template). Until OCI image-volume
-   > injection exists (see the integration plan's "runtime injection modes"), task images must be
-   > rebuilt to embed the guest and run it as the entrypoint — `default-env` works because its
-   > image *is* the guest. Note substrate also requires template images to be digest-pinned.
+   > (verified against a digest-pinned `python:3.12-slim` template). Substrate `main` has since
+   > gained OCI image volumes (`ImageVolumeSource`), which should allow mounting the guest from
+   > its own image instead of rebuilding task images; until this branch picks that up, task
+   > images must be rebuilt to embed the guest and run it as the entrypoint — `default-env`
+   > works because its image *is* the guest. Note substrate also requires template images to be
+   > digest-pinned.
 4. **Network path from wherever Gym's rollout workers run** to `ate-env-api`: in-cluster DNS
    (`http://ate-env-api.ate-env:7777`) or, for a workstation, a port-forward:
 
@@ -78,6 +85,10 @@ IMAGE=$(hack/bake-task-image.sh python:3.12-slim gcr.io/$PROJECT/py-task-guest)
 echo "$IMAGE"   # gcr.io/.../py-task-guest@sha256:...
 ```
 
+The exec deadline (`exec(timeout_s=…)`) is enforced guest-side with a `timeout` wrapper, so the
+task image must have a `timeout` binary (coreutils or busybox — present in the slim Debian and
+Alpine bases; absent from distroless).
+
 Then create an ActorTemplate whose container runs the guest, and map it in the provider config:
 
 ```yaml
@@ -89,11 +100,15 @@ spec:
   containers:
   - { name: guest, image: "IMAGE_FROM_ABOVE", command: ["/ko-app/ate-env-guest"],
       env: [{ name: PORT, value: "80" }], readyz: { httpGet: { path: /readyz, port: 80 } } }
-  pauseImage: registry.k8s.io/pause:3.10.2@sha256:f548e0e8e3dc1896ca956272154dde3314e8cc4fde0a57577ee9fa1c63f5baf4
   sandboxClass: gvisor
   snapshotsConfig: { location: "gs://$BUCKET/ate-env/" }
   workerSelector: { matchLabels: { workload: default-env } }
 ```
+
+(No `pauseImage` here: since substrate#1026 the pause image comes from the cluster's default
+`SandboxConfig`, not the ActorTemplate. Manifests that still set `spec.pauseImage` — including
+current `ate-env manifest` output, which pins an older substrate — have the field pruned by the
+CRD schema.)
 
 Verified end-to-end: `python:3.12-slim` and `node:22-slim` bases both bake, template, and run real
 `python3` / `node` tasks through the provider (the guest is static, so any base distro works). This
