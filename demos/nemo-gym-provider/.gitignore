@@ -1,2 +1,7 @@
 *.egg-info/
 __pycache__/
+.pytest_cache/
+build/
+dist/
+# The repo root ignores `__*`, which would silently drop package init files.
+!__init__.py
