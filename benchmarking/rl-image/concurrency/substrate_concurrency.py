@@ -258,6 +258,19 @@ def pct(v, p):
     v = sorted(v); return round(v[min(len(v) - 1, int(round(p * (len(v) - 1))))], 2) if v else None
 
 ensure_atespace()
+# Leftovers from a previous run (actors stuck in DELETING/CRASHED after a bulk delete) keep their
+# workers occupied and make the next burst queue for workers. Sweep them first; a later delete of a
+# stuck actor usually succeeds.
+try:
+    lo = [a.metadata.name for a in ctl.ListActors(A.ListActorsRequest(atespace=ATESPACE, page_size=1000)).actors]
+    if lo:
+        with ThreadPoolExecutor(max_workers=20) as ex: outcomes = list(ex.map(delete_actor, lo))
+        print(json.dumps({"presweep": {"leftover_actors": len(lo), "outcomes": {k: outcomes.count(k) for k in set(outcomes)}}}), flush=True)
+        for _ in range(60):
+            if not ctl.ListActors(A.ListActorsRequest(atespace=ATESPACE, page_size=1000)).actors: break
+            time.sleep(2)
+except Exception as e:                          # noqa: BLE001
+    print(json.dumps({"presweep_error": str(e)[:200]}), flush=True)
 setup = {"mode": MODE}; ts0 = time.monotonic()
 if MODE == "golden-one":
     plan = [(f"{PREFIX}-one", images[0][0])] * N
