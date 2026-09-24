@@ -1,0 +1,58 @@
+# Rendered by run.sh. Runs in ate-system as the ate-client ServiceAccount so the projected token
+# is accepted by ate-api-server (audience api.ate-system.svc); TLS roots come from the servicedns
+# ClusterTrustBundle snapshotted into ConfigMap rl-bench-ca by run.sh.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rl-bench-__MODE__-__N__
+  namespace: ate-system
+  labels: {app.kubernetes.io/name: rl-bench-harness}
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: rl-bench-harness}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: ate-client
+      nodeSelector: {cloud.google.com/gke-nodepool: standard-pool-v2}
+      containers:
+        - name: load
+          image: python:3.12-slim
+          command: ["sh", "-c"]
+          args:
+            - >-
+              pip install -q --root-user-action=ignore grpcio grpcio-tools requests 1>&2 &&
+              mkdir -p /tmp/gen &&
+              python -m grpc_tools.protoc -I/work/proto
+              -I"$(python -c 'import grpc_tools,os;print(os.path.join(os.path.dirname(grpc_tools.__file__),"_proto"))')"
+              --python_out=/tmp/gen --grpc_python_out=/tmp/gen /work/proto/ateapi.proto /work/proto/guest.proto &&
+              PYTHONPATH=/tmp/gen exec python /work/substrate_concurrency.py
+          env:
+            - {name: MODE, value: "__MODE__"}
+            - {name: "N", value: "__N__"}
+            - {name: RUN_LABEL, value: "__LABEL__"}
+            - {name: CPU, value: "__CPU__"}
+            - {name: MEM, value: "__MEM__"}
+            - {name: GUEST_IMAGE, value: "__GUEST_IMAGE__"}
+            - {name: ATESPACE, value: "rl-bench"}
+            - {name: POOL_LABEL, value: "workload=rl-bench-ateom"}
+            - {name: BUCKET, value: "gs://glottman-snapshot-test/rl-bench/"}
+            - {name: IMAGES, value: "/work/images.tsv"}
+          resources:
+            requests: {cpu: 500m, memory: 512Mi}
+          volumeMounts:
+            - {name: work, mountPath: /work}
+            - {name: proto, mountPath: /work/proto}
+            - {name: ate, mountPath: /var/run/ate, readOnly: true}
+      volumes:
+        - name: work
+          configMap: {name: rl-bench-harness}
+        - name: proto
+          configMap: {name: rl-bench-proto}
+        - name: ate
+          projected:
+            sources:
+              - serviceAccountToken: {audience: api.ate-system.svc, expirationSeconds: 7200, path: token}
+              - configMap: {name: rl-bench-ca, items: [{key: ca.pem, path: ca.pem}]}

@@ -1,0 +1,27 @@
+# Worker pool for the concurrency benchmark: enough workers for 100 concurrent actors plus the
+# golden bakes that run beside them, pinned to the bench-n2 nodes. Limits are the per-actor
+# capacity (>= the ActorTemplates' limits); requests stay small so 21 workers fit per node.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rl-bench
+---
+apiVersion: ate.dev/v1alpha1
+kind: WorkerPool
+metadata:
+  name: rl-bench-ateom
+  namespace: rl-bench
+  labels:
+    workload: rl-bench-ateom
+spec:
+  replicas: 210
+  sandboxClass: gvisor
+  workerImage: gcr.io/gke-ai-eco-dev/ate-images-glottman/ateom-gvisor@sha256:1d9f0a477e19c98787a52e4848c729edd996fa07c8ff1718fa5d4603604dab50
+  template:
+    labels:
+      workload: rl-bench-ateom
+    nodeSelector:
+      cloud.google.com/gke-nodepool: bench-n2
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {cpu: "2", memory: 2Gi}
