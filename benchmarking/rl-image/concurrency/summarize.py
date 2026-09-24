@@ -20,6 +20,7 @@ for path in sys.argv[1:]:
     s, recs = load(path)
     if not s: print(f"{path}: no summary"); continue
     system = s.get("system", "agentenv"); mode = s.get("mode"); n = s.get("n")
+    label = "substrate/" + s.get("sandbox_class", "SANDBOX_CLASS_GVISOR").replace("SANDBOX_CLASS_", "").lower() if system == "substrate" else system
     if system == "substrate":
         start = fmt(s, "t_running"); ready = fmt(s, "t_ready"); cmd = fmt(s, "t_first_cmd")
         park = fmt(s, "park_s"); res = fmt(s, "resume_running_s"); rcmd = fmt(s, "resume_first_cmd_s")
@@ -28,7 +29,7 @@ for path in sys.argv[1:]:
         start = fmt(s, "t_running"); ready = "-"; cmd = fmt(s, "t_first_cmd")
         park = fmt(s, "pause_s"); res = fmt(s, "resume_running_s"); rcmd = fmt(s, "resume_first_cmd_s")
         nodes = len(s.get("per_node_running_at_peak") or {}); extra = ""
-    rows.append((system, mode, n, f"{s['pass']}/{n}", start, ready, cmd, park, res, rcmd, nodes, extra, s.get("kill_all_s")))
+    rows.append((label, mode, n, f"{s['pass']}/{n}", start, ready, cmd, park, res, rcmd, nodes, extra, s.get("kill_all_s")))
 hdr = ("system", "mode", "N", "pass", "running p50/p90", "ready", "first cmd", "park", "resume running", "resume first cmd", "nodes", "notes", "kill s")
 w = [max(len(str(r[i])) for r in rows + [hdr]) for i in range(len(hdr))]
 for r in [hdr] + rows: print("  ".join(str(c).ljust(w[i]) for i, c in enumerate(r)))
