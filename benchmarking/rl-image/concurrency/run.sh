@@ -10,7 +10,7 @@ MODE=$1; N=$2; LABEL=${3:-$MODE-$N}; CPU=${CPU:-2}; MEM=${MEM:-2Gi}
 SANDBOX_CLASS=${SANDBOX_CLASS:-SANDBOX_CLASS_GVISOR}; SANDBOX_CONFIG=${SANDBOX_CONFIG:-gvisor-default}
 POOL_LABEL=${POOL_LABEL:-workload=rl-bench-ateom}; TEMPLATE_PREFIX=${TEMPLATE_PREFIX:-swe}
 : "${GUEST_IMAGE:?set GUEST_IMAGE to the digest-pinned ate-env-guest image}"
-CTX=${CTX:-gke_gke-ai-eco-dev_us-central1_glottman-sandbox-test-1}; K="kubectl --context $CTX"
+CTX=${CTX:-gke_gke-ai-eco-dev_us-central1_glottman-sandbox-test-1}; K="kubectl --context $CTX --request-timeout=60s"
 [ "${SKIP_POOL:-0}" = 1 ] || $K apply -f workerpool.yaml >/dev/null
 $K -n ate-system create configmap rl-bench-harness --from-file=substrate_concurrency.py --from-file=images.tsv --dry-run=client -o yaml | $K apply -f - >/dev/null
 $K -n ate-system create configmap rl-bench-proto --from-file=proto/ateapi.proto --from-file=proto/guest.proto --dry-run=client -o yaml | $K apply -f - >/dev/null
