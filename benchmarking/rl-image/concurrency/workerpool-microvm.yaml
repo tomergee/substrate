@@ -1,0 +1,22 @@
+# microVM (Kata on Cloud Hypervisor) worker pool for the concurrency benchmark, on the
+# nested-virtualization pool bench-n2-kvm. The controller adds the /dev/kvm device request.
+# Capacity must cover the ActorTemplates' limits (2 vCPU / 2Gi guest) plus the VMM reserve.
+apiVersion: ate.dev/v1alpha1
+kind: WorkerPool
+metadata:
+  name: rl-bench-microvm
+  namespace: rl-bench
+  labels:
+    workload: rl-bench-microvm
+spec:
+  replicas: 210
+  sandboxClass: microvm
+  workerImage: gcr.io/gke-ai-eco-dev/ate-images-glottman/ateom-microvm@sha256:d75553c72c970a8b0a9e8c41e9cca9ef08f9fec45a15d28e70e2d20133ee95fa
+  template:
+    labels:
+      workload: rl-bench-microvm
+    nodeSelector:
+      cloud.google.com/gke-nodepool: bench-n2-kvm
+    resources:
+      requests: {cpu: 100m, memory: 512Mi}
+      limits: {cpu: "2", memory: 2560Mi}

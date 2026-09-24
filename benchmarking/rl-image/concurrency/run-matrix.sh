@@ -5,7 +5,8 @@
 set -u
 cd "$(dirname "$0")"
 export GUEST_IMAGE=${GUEST_IMAGE:?} SKIP_POOL=1 JOB_TIMEOUT_S=3600
-run() { echo "=== $(date +%T) run $*"; ./run.sh "$@" 2>&1 | tail -2 || true; }
+PFX=${LABEL_PREFIX:-}   # e.g. LABEL_PREFIX=mvm- with the microvm env set (see run.sh)
+run() { echo "=== $(date +%T) run $*"; ./run.sh "$1" "$2" "$PFX$3" 2>&1 | tail -2 || true; }
 run golden-one 10  golden-one-10
 run golden-one 100 golden-one-100
 run golden-one 100 golden-one-100-b

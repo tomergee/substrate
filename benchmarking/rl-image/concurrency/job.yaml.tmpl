@@ -4,7 +4,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: rl-bench-__MODE__-__N__
+  name: rl-bench-__TEMPLATE_PREFIX__-__MODE__-__N__
   namespace: ate-system
   labels: {app.kubernetes.io/name: rl-bench-harness}
 spec:
@@ -37,7 +37,10 @@ spec:
             - {name: MEM, value: "__MEM__"}
             - {name: GUEST_IMAGE, value: "__GUEST_IMAGE__"}
             - {name: ATESPACE, value: "rl-bench"}
-            - {name: POOL_LABEL, value: "workload=rl-bench-ateom"}
+            - {name: POOL_LABEL, value: "__POOL_LABEL__"}
+            - {name: SANDBOX_CLASS, value: "__SANDBOX_CLASS__"}
+            - {name: SANDBOX_CONFIG, value: "__SANDBOX_CONFIG__"}
+            - {name: TEMPLATE_PREFIX, value: "__TEMPLATE_PREFIX__"}
             - {name: BUCKET, value: "gs://glottman-snapshot-test/rl-bench/"}
             - {name: IMAGES, value: "/work/images.tsv"}
           resources:

@@ -30,7 +30,7 @@ TOKEN_FILE = os.environ.get("TOKEN_FILE", "/var/run/ate/token"); CA_FILE = os.en
 ATESPACE = os.environ.get("ATESPACE", "rl-bench"); POOL_LABEL = os.environ.get("POOL_LABEL", "workload=rl-bench-ateom")
 IMG_REPO = os.environ.get("IMG_REPO", "us-docker.pkg.dev/gke-ai-eco-dev/swebench-mirror/swebench-verified")
 GUEST_IMAGE = os.environ["GUEST_IMAGE"]; BUCKET = os.environ.get("BUCKET", "gs://glottman-snapshot-test/rl-bench/")
-SANDBOX_CONFIG = os.environ.get("SANDBOX_CONFIG", "gvisor-default")
+SANDBOX_CONFIG = os.environ.get("SANDBOX_CONFIG", "gvisor-default"); SANDBOX_CLASS = os.environ.get("SANDBOX_CLASS", "SANDBOX_CLASS_GVISOR")
 MODE = os.environ.get("MODE", "golden"); N = int(os.environ.get("N", "1"))
 CPU = os.environ.get("CPU", "2"); MEM = os.environ.get("MEM", "2Gi"); LABEL = os.environ.get("RUN_LABEL", "")
 PREFIX = os.environ.get("TEMPLATE_PREFIX", "swe"); GOLDEN_TIMEOUT = float(os.environ.get("GOLDEN_TIMEOUT_S", "1800"))
@@ -68,7 +68,7 @@ def template_msg(name, tag, digest):
          "resources": {"limits": [{"name": "cpu", "quantity": CPU}, {"name": "memory", "quantity": MEM}]},
          "snapshotConfig": {"onPause": "SNAPSHOT_CONTENT_SCOPE_FULL", "onCommit": "SNAPSHOT_CONTENT_SCOPE_FULL",
                             "storageLocation": BUCKET},
-         "sandboxConfig": {"sandboxClass": "SANDBOX_CLASS_GVISOR", "configName": SANDBOX_CONFIG}}
+         "sandboxConfig": {"sandboxClass": SANDBOX_CLASS, "configName": SANDBOX_CONFIG}}
     return ParseDict(d, A.ActorTemplate())
 
 def ensure_atespace():
@@ -294,7 +294,7 @@ ok = [r for r in results if r.get("status") == "pass"]
 per_node = {}
 for r in ok:
     k = (r.get("worker") or {}).get("workerNodeName") or (r.get("worker") or {}).get("nodeName") or "?"; per_node[k] = per_node.get(k, 0) + 1
-summ = {"summary": True, "system": "substrate", "mode": MODE, "n": N, "label": LABEL, "pass": len(ok), "fail": N - len(ok),
+summ = {"summary": True, "system": "substrate", "sandbox_class": SANDBOX_CLASS, "mode": MODE, "n": N, "label": LABEL, "pass": len(ok), "fail": N - len(ok),
         "cpu": CPU, "mem": MEM, "template_setup": setup, "per_node": per_node, "kill_all_s": kill_s,
         "kill_outcomes": {k: kills.count(k) for k in set(kills)}, "retries_total": sum(r.get("retries", 0) for r in results)}
 keys = ["t_create", "t_post", "t_running", "t_ready", "t_first_cmd", "cmd_s"]
