@@ -25,11 +25,16 @@ for path in sys.argv[1:]:
         start = fmt(s, "t_running"); ready = fmt(s, "t_ready"); cmd = fmt(s, "t_first_cmd")
         park = fmt(s, "park_s"); res = fmt(s, "resume_running_s"); rcmd = fmt(s, "resume_first_cmd_s")
         nodes = len(s.get("per_node") or {}); extra = f"retries={s.get('retries_total')} goldens={((s.get('template_setup') or {}).get('goldens_ready'))}"
+    elif system == "agent-sandbox":
+        start = fmt(s, "t_bound"); ready = fmt(s, "t_running"); cmd = fmt(s, "t_first_cmd")
+        park = "-"; res = "-"; rcmd = "-"
+        nodes = len(s.get("per_node") or {}); ts = s.get("template_setup") or {}
+        extra = f"pool fill p50/max={((ts.get('pool_ready_s') or {}).get('p50'))}/{((ts.get('pool_ready_s') or {}).get('max'))} gone={s.get('pods_gone_s')}"
     else:
         start = fmt(s, "t_running"); ready = "-"; cmd = fmt(s, "t_first_cmd")
         park = fmt(s, "pause_s"); res = fmt(s, "resume_running_s"); rcmd = fmt(s, "resume_first_cmd_s")
         nodes = len(s.get("per_node_running_at_peak") or {}); extra = ""
     rows.append((label, mode, n, f"{s['pass']}/{n}", start, ready, cmd, park, res, rcmd, nodes, extra, s.get("kill_all_s")))
-hdr = ("system", "mode", "N", "pass", "running p50/p90", "ready", "first cmd", "park", "resume running", "resume first cmd", "nodes", "notes", "kill s")
+hdr = ("system", "mode", "N", "pass", "running (bound) p50/p90", "ready", "first cmd", "park", "resume running", "resume first cmd", "nodes", "notes", "kill s")
 w = [max(len(str(r[i])) for r in rows + [hdr]) for i in range(len(hdr))]
 for r in [hdr] + rows: print("  ".join(str(c).ljust(w[i]) for i, c in enumerate(r)))
