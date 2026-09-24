@@ -1,0 +1,44 @@
+# Equal-hardware run: worker pools on bench-c4-kvm, 4 x c4-standard-8 (Emerald/Granite Rapids) with nested virtualization, 300 GB Hyperdisk Balanced,
+# the same node shape AgentENV was measured on (4 x c2-standard-8, 25 sandboxes per node at N=100).
+# 200 workers per class (50 per node) so N=100 actors plus their 100 golden bakes never queue;
+# only one class is scaled up at a time. Pool labels keep the original values so the existing
+# (immutable) templates, whose workerSelector names them, place actors here; the 10-node pools sit at 0. Requests are tiny so 50 pods fit per 8-vCPU node.
+apiVersion: ate.dev/v1alpha1
+kind: WorkerPool
+metadata:
+  name: rl-bench-ateom-c4
+  namespace: rl-bench
+  labels:
+    workload: rl-bench-ateom
+spec:
+  replicas: 200
+  sandboxClass: gvisor
+  workerImage: gcr.io/gke-ai-eco-dev/ate-images-glottman/ateom-gvisor@sha256:1d9f0a477e19c98787a52e4848c729edd996fa07c8ff1718fa5d4603604dab50
+  template:
+    labels:
+      workload: rl-bench-ateom
+    nodeSelector:
+      cloud.google.com/gke-nodepool: bench-c4-kvm
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {cpu: "2", memory: 2Gi}
+---
+apiVersion: ate.dev/v1alpha1
+kind: WorkerPool
+metadata:
+  name: rl-bench-microvm-c4
+  namespace: rl-bench
+  labels:
+    workload: rl-bench-microvm
+spec:
+  replicas: 0
+  sandboxClass: microvm
+  workerImage: gcr.io/gke-ai-eco-dev/ate-images-glottman/ateom-microvm@sha256:d75553c72c970a8b0a9e8c41e9cca9ef08f9fec45a15d28e70e2d20133ee95fa
+  template:
+    labels:
+      workload: rl-bench-microvm
+    nodeSelector:
+      cloud.google.com/gke-nodepool: bench-c4-kvm
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {cpu: "2", memory: 2560Mi}
